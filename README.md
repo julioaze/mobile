@@ -977,8 +977,10 @@ _É necessário ter uma conta de desenvolverdor da Apple_
 # Finalizando...
 
 o Expo já vem preparado com a feature `update over the air`. Essa feature fantástica permite que 
-todas as alterações realizadas no seu app sejam diponibilizadas automaticamente atualizados, em que você 
+todas as alterações realizadas no seu app sejam diponibilizadas automaticamente, sem que você 
 tenha que fazer todo esse processo novamente. Show né? 😁 
+
+Como isso o seu app estará sempre atualizado.
 
 Depois de alterar o seu código, basta executar `expo publish` 
 
