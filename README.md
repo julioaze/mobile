@@ -610,3 +610,364 @@ Vamos resolver de uma forma mais simples, apenas alterando a propriedade _bottom
 
 Aqui terminamos toda a parte de visualização do nosso App 💪
 
+
+# DEIXANDO TUDO DINÂMICO
+
+Agora que já temos toda a parte visual, precisamos conectar na nossa API, e buscar dados reais.
+
+Vamos começar instalando o `axios`, que será nosso conector. Lembre-se de que também utilizamos
+o axios na API.
+
+`yarn add axios`
+
+Agora dentro da pasta _src_ vamos criar uma pasta _services_ e dentro dela um arquivo chamado
+`api.js`
+
+**api.js**
+```js
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: '',
+});
+
+export default api;
+```
+A propriedade `baseURL` depende do ambiente operacional, e de onde você está executando a 
+aplicação: se um dispositivo físico ou se um emulador.
+
+- Se estiver utilizando um dispositivo físico, o ip será o mesmo que aparece acima do QRCode
+na página do Metro Bundler. Porém, a porta a ser utilizada não é a porta na qual o bundle
+está sendo executando, e sim, a porta onde a API está sendo executada.
+
+**Exemplo**
+`htpp://192.168.5.213:3333`
+
+- Se estiver utilizando um emulador iOS, pode substituir o _ip_ por _locahost_. Veja:
+
+**Exemplo**
+`htpp://localhostt:3333`
+
+- Se estiver utilizando um emulator Android, você poderá usar o _ip_ do Metro Bundler. Caso
+não funcione, você pode substituir substituir o _ip_ pelo ip padrão. Veja:
+
+**Exemplo**
+`htpp://192.168.5.213:3333`
+_ou_
+`htpp://10.0.2.2:3333`
+
+
+## Utilizando a API
+
+Dentro do arquivo `main.js` vamos começar fazendo algumas alterações.
+
+- Primeiro vamos importar o serviço que acabamos de criar.
+`import api from '../services/api';`
+
+- Depois vamos criar um método para carregar os usuários. Então, logo após onde declaramos o
+_useEffect()_, faremos o seguinte:
+
+```js
+async function loadDevs() {
+  // pegamos a localização do usuário de currentRegion
+  const { latitude, logitude } = currentRegion;
+
+  // agora conectamos na nossa API via Axios na rota que especificamos para a busca
+  // * ver a rota search no Insomnia
+  // passando como parâmetro as propriedades necessárias
+  const response = await api.get('/search', {
+    params: {
+      latitude,
+      longitude,
+      techs: 'ReactJS'
+    }
+  })
+}
+```
+
+Passamos as _techs_ como hard coded apenas para teste.
+
+Agora, a partir da resposta recebida da API, vamos criar um estado para armazenar os dados.
+Faremos isso logo acima do estado _currentRegion_ e iniciamos o estado como um array vazio,
+ja que as techs são em formato array.
+
+```js
+const [devs, setDevs] = useState([]);
+```
+
+Em seguida, vamos setar os dados da resposta no estado, atualizando nossa função `loadDevs`
+
+```js
+async function loadDevs() {
+  const { latitude, logitude } = currentRegion;
+
+  const response = await api.get('/search', {
+    params: {
+      latitude,
+      longitude,
+      techs: 'ReactJS'
+    }
+  });
+
+  setDevs(response.data.devs);
+}
+```
+
+Bom, agora precisamos resolver alguns problemas. O primeiro é com relação a atualização do
+estado referente a localização no mapa, quando o usuário alterar a posição, arrastando.
+
+Então vamos criar um função que será responsável por atualizar os dados no mapa, logo abaixo
+da função `loadDevs`.
+
+```js
+function handleRegionChanged(region) {
+  setCurrentRegion(region);
+}
+```
+
+E depois precisamos chamar essa função na propriedade `onRegionChangeComplet` do componente
+_<MapView>_, assim:
+
+```js
+<MapView onRegionChangeComplete={handleRegionChanged}
+//...
+```
+Com isso, toda vez que o mapa sofrer uma alteração de posição, será feita uma atualização no
+estado, mostrando também outros devs cadastrados num raio de até 10km 👌 
+
+Se colocarmos um console log na função _handleRegionChanged_, podemos verificar o funcionamento
+no Metro Bundler.
+
+Agora precisamos executar a função `loadDevs()` quando o usuário clicar no botão de pesquisa.
+
+Então, basta passarmos a função como parâmetro no botão, assim;
+
+```js
+<TouchableOpacity onPress={loadDevs} style={styles.loadButton}>
+    <MaterialIcons name="my-location" size={20} color="#FFF" />
+</TouchableOpacity>
+```
+
+Lembrando que por enquanto estamos passando as tecnologias no modo hard coded. 😊
+
+Bom, agora temos uma lista de devs. E para cada um deles eu quero mostrar a foto com
+o callout. Cara dev é correspondente a um componente _<Marker>_, então precisamos repetir
+esse componente para cada um dos devs retornados na pesquisa.
+
+Vamos começar recortando esse componente e fazer uma iteração.
+
+```js
+{devs.map(dev => (
+
+))}
+```
+
+Agora, os ajustes finais:
+
+```js
+{devs.map(dev => (
+  <Marker
+    key={dev._id}
+    coordinate={{
+      latitude: dev.location.coordinates[1],
+      longitude: dev.location.coordinates[0]
+    }}
+  >
+    <Image style={styles.avatar} source={{ uri: dev.avatar_url }} />
+    <Callout
+      onPress={() => {
+        navigation.navigate("Profile", {
+          github_username: dev.github_username
+        });
+      }}
+    >
+      <View style={styles.callout}>
+        <Text style={styles.devName}>{dev.name}</Text>
+        <Text style={styles.devBio}>{dev.bio}</Text>
+        <Text style={styles.devTechs}>{dev.techs.join(", ")}</Text>
+      </View>
+    </Callout>
+  </Marker>
+))}
+
+```
+
+Salvar e testar.
+
+Importante: o nome da tecnologia é case sensitive, neste caso precisamos escrever da
+mesma forma com que foi cadastrado. Uma alteração a ser feita, é converter em _uppercase_
+ao salvar no banco, e também o texto digitado na caixa de busca. Mais uma lição de casa 🤪
+
+
+Agora vamos fazer o input de busca funcionar. Falta pouco...
+
+Para isso vamos criar mais um estado na nossa aplicação, começando com uma string vazia:
+
+```js
+const [techs, setTechs] = useState('');
+```
+
+Vamos também alterar o componente _<TextInput>_ para receber algumas propriedades:
+
+```js
+<TextInput
+  style={styles.searchInput}
+  placeholder="Buscar devs por tecnologias"
+  placeholderTextColor="#999"
+  autoCapitalize="words"
+  autoCorrect={false}
+  value={techs}
+  onChangeText={setTechs}
+/>
+```
+**Observação**
+O evento `onChangeText` recebe diretamente o texto digitado, por isso utilizamos o shorthand.
+Como temos um parâmetro, que retorna uma função que recebe esse mesmo parâmetro, podemos simplificar
+apenas chamando a função.
+
+Tradicionalmente seria 
+```js
+onChangeText={text => setTechs(text)}
+```
+
+E agora na função `loadDevs()` precisamos apenas apagar a string que estamos passando hard coded.
+
+Como isso, terminamos nossa aplicação!
+
+
+# GERANDO APK
+
+**- Splash Screen e Icone da aplicação**
+
+As imagens ficam em _assets_ na raiz da aplicação.
+
+Basta criar em algum editor de imagens, a duas imagens correspondentes a _splash screen_ e ao
+_icone_ da aplicação, mas medidas exibidas pelo VS Code. Uma boa opção é o **Figma**. No Windows
+também é possível utilzar o **Adobe XD** e no Mac o **Sketch**
+
+
+A medida do ícone é de `192 x 192` e a medida da splash é de `1242 x 2436`
+
+O formato das imagens é **PNG**
+
+
+**- Configurações para gerar o APK (Android) e o IPA (iOS)**
+
+Para facilitar, o melhor é seguir a própria documentação do Expo, disponível em: 
+
+https://docs.expo.io/versions/latest/distribution/building-standalone-apps/
+
+Para gerar o executável para Android, precisamos utilizar a configuração abaixo:
+
+*app.json*
+```json
+"android": {
+  "package": "com.yourcompany.yourappname",
+  "versionCode": 1
+}
+```
+
+Geralmente substituimos o *package* utilizando o `com` + nome da empresa + nome do aplicativo, assim:
+
+```json
+"android": {
+  "package": "com.julioaze.devradar",
+  "versionCode": 1
+}
+```
+
+Para **iOS** passamos o "bundleIdentifier", assim:
+
+```json
+"bundleIdentifier": "com.julioaze.devradar",
+```
+
+Outra configuração é retirar `web` da sessão `platforms` deixando somente **ios** e **android**
+
+Na sessão `splash` você pode alterar a cor de fundo para a mesma cor de fundo da splash que 
+você criou no editor de imagens. Isso é interessante para que toda a área de tela seja coberta
+caso a imagem não a cubra totalmente.
+
+Na sessão `expo`, podemos alterar o nome da aplicação para o nome que queremos que apareça como nome da
+aplicação.
+
+Se você desejar aprofundar nas configurações do **app.json**, talvez queria dar uma espiada aqui
+nessa documentação:
+
+https://docs.expo.io/versions/latest/workflow/configuration/
+
+
+**- Executando o build**
+
+Agora basicamente basta rodar o build para gerar a nossa aplicação. Vejamos:
+
+`expo build:android` ou `expo build:ios`
+
+Simples assim 🤪 
+
+No Android, você pode gerar diretamente o APK, com o seguinte comando:
+
+`expo build:android -t apk`
+
+Lembrando que, se você deseja enviar o seu aplicativo para a loja, essa não é a melhor opção. Isso
+porque a loja trabalha com o **app-bundle**. Esse app-bundle consegue criar um pacote com vários
+formatos de aplicação diferentes, e ele vai sempre instalar o melhor formato de acordo com o 
+dispositivo do usuário. Isso faz com que a aplicação fique menor.
+
+Para gerar para a loja:
+
+`expo build:android -t app-bundle`
+
+Gerando o APK, só depois de baixar e instalar é que ele vai verificar o dispositivo e instalar a
+melhor versão. Nesse caso, o pacote é bem maior, pois conterá todos os formatos.
+
+O APK é legal quando vamos testar no nosso celular, ou de alguém, pois é mais fácil o seu 
+compartilhamento, seja por e-mail, whatsapp, etc.
+
+**Isso para Android. No iOS, somente pela loja**
+
+
+Vamos gerar o APK  com o comando acima. Caso você não esteja logado, o Expo perguntará se deseja
+criar uma nova conta, ou logar numa conta existente.
+
+Em seguida, o Expo perguntará se você quer utilizar uma keystore existente ou se o Expo deverá
+gerar uma nova keystore.
+
+Como essa é uma nova aplicação, do zero, podemos deixar o Expo fazer esse trabalho duro por nós.
+
+**Erro de conexão**
+
+- expo start
+- ctrl+c
+- expo build:android -t apk
+
+Para verificar o progresso do build, copie o link exibido próximo a *You can monitor the build at*
+e cole no seu navegador.
+
+O Expo também gera uma URL para o seu aplicativo, próximo a *Your URL is*
+
+Show Dev!!
+
+O massa é que todo o processo de build é feito diretamente nos servidores do Expo. Então conseguimos
+gerar APK e IPA, independente de qual S.O. utilizamos no desenvolvimento 😁 
+
+
+**Atenção**
+
+Esse processo de primeira build demora mmmmmuuuuuuiiiiiiittttttttoooooo
+
+No final você poderá baixar o APK gerado no link descrito acima.
+
+
+Se você quiser acompanhar a evolução das features do Expo, siga esse link:
+
+https://expo.canny.io/
+
+
+**iOS**
+
+Para gerar o IPA, basta executarmos
+
+`expo build:ios`
+
+_É necessário ter uma conta de desenvolverdor da Apple_
